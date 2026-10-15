@@ -17,6 +17,8 @@
       <h2 id="source-h">1. Source PDF</h2>
       <label for="pdfFile">PDF file</label>
       <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+      <label for="minSize">Minimum image dimension (px) <small>— smaller images are treated as decorative and skipped</small></label>
+      <input id="minSize" type="number" value="50" min="1" max="500" />
       <p><small>Tip: output from <a href="https://github.com/mgifford/pdf-crawler">pdf-crawler</a> (<code>ImageAltTextTest</code> failures, <code>report.json</code>) makes good test input.</small></p>
     </section>
 
@@ -52,7 +54,7 @@
       <button id="exportCsv" type="button" disabled>Export CSV</button>
       <div id="status" role="status" aria-live="polite"></div>
       <table id="resultsTable" hidden>
-        <caption>Per-page image drafts — edit before export</caption>
+        <caption>Per-image drafts — edit before export. Context is surrounding page text (trimmed at a word boundary, full text scrolls).</caption>
         <thead>
           <tr><th scope="col">Page</th><th scope="col">Preview</th><th scope="col">Context</th><th scope="col">Alt-text draft</th><th scope="col">Decorative</th></tr>
         </thead>

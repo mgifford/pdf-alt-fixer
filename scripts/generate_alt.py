@@ -61,9 +61,9 @@ def main():
                 continue
             if pix.width < args.min_size or pix.height < args.min_size:
                 continue
-            words = " ".join(w[4] for w in page.get_text("words")[:60])
+            words = " ".join(w[4] for w in page.get_text("words")[:150])
             items.append({"id": f"p{pno}_x{xref}", "page": pno, "xref": xref,
-                          "width": pix.width, "height": pix.height, "context": words[:600]})
+                          "width": pix.width, "height": pix.height, "context": words[:1000]})
             if len(items) >= args.max_images:
                 break
         if len(items) >= args.max_images:

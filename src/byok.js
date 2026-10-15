@@ -2,10 +2,13 @@
 // Key stays in page memory only. Local installs can point at
 // http://localhost:11434/v1 (Ollama) or http://localhost:8080/v1 (llama-server).
 
+import { trimWords } from './pdfExtract.js';
+
 export async function draftViaEndpoint({ baseUrl, apiKey, model, lang, dataUrl, context }) {
   const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+  const ctx = trimWords(context || '', 800) || 'none';
   const prompt = `Write concise alt-text (${lang || 'en'}, max 250 characters, no quotes) for this PDF page image. ` +
-    `Describe purpose/content for a screen-reader user. Context: ${context ? context.slice(0, 300) : 'none'}. ` +
+    `Describe purpose/content for a screen-reader user. Context: ${ctx}. ` +
     `If purely decorative, reply exactly: DECORATIVE.`;
   const res = await fetch(url, {
     method: 'POST',

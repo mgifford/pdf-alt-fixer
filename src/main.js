@@ -1,4 +1,4 @@
-import { extractPages } from './pdfExtract.js';
+import { extractImages } from './pdfExtract.js';
 import { draftViaEndpoint } from './byok.js';
 import { draftLocal } from './localVlm.js';
 
@@ -28,20 +28,41 @@ function renderRows() {
   drafts.forEach((d, i) => {
     const tr = document.createElement('tr');
 
-    const page = document.createElement('td'); page.textContent = d.page; tr.appendChild(page);
+    const page = document.createElement('td');
+    page.innerHTML = '';
+    const strong = document.createElement('strong');
+    strong.textContent = `Page ${d.page}`;
+    page.appendChild(strong);
+    const idLine = document.createElement('div');
+    idLine.innerHTML = '';
+    const small = document.createElement('small');
+    small.textContent = d.fullPage ? `${d.id} · full page` : `${d.id} · ${d.width}×${d.height}px · shown ${d.displayed || ''}`;
+    idLine.appendChild(small);
+    page.appendChild(idLine);
+    tr.appendChild(page);
 
     const prev = document.createElement('td');
     const img = document.createElement('img'); img.src = d.dataUrl; img.alt = ''; img.className = 'thumb';
     prev.appendChild(img); tr.appendChild(prev);
 
-    const ctx = document.createElement('td'); ctx.textContent = d.context || '—'; tr.appendChild(ctx);
+    const ctx = document.createElement('td');
+    const ctxBox = document.createElement('div'); ctxBox.className = 'ctx';
+    ctxBox.textContent = d.context || '—'; ctx.appendChild(ctxBox); tr.appendChild(ctx);
 
     const altTd = document.createElement('td');
     const ta = document.createElement('textarea');
     ta.id = `alt-${d.id}`; ta.value = d.decorative ? '' : d.alt;
-    const lb = document.createElement('label'); lb.htmlFor = ta.id; lb.textContent = `Alt-text for page ${d.page}`;
+    const lb = document.createElement('label'); lb.htmlFor = ta.id; lb.textContent = `Alt-text for ${d.id}`;
     lb.style.cssText = 'position:absolute;left:-999px;';
     altTd.appendChild(lb); altTd.appendChild(ta);
+    if (d.error) {
+      const err = document.createElement('div');
+      err.innerHTML = '';
+      const errSmall = document.createElement('small');
+      errSmall.textContent = `Generation failed: ${d.error}`;
+      err.appendChild(errSmall);
+      altTd.appendChild(err);
+    }
     ta.addEventListener('input', () => { drafts[i].alt = ta.value; });
     tr.appendChild(altTd);
 
@@ -73,11 +94,17 @@ $('runBtn').addEventListener('click', async () => {
   } catch { /* ignore */ }
   if (engine === 'byok' && (!baseUrl || !model)) return setStatus('Enter API base URL and model.');
 
-  setStatus('Extracting pages…');
+  setStatus('Extracting embedded images…');
   let pages;
   try {
-    pages = await extractPages(file);
+    const minSize = Math.max(1, parseInt($('minSize').value, 10) || 50);
+    pages = await extractImages(file, { minSize });
   } catch (e) { return setStatus(`PDF extraction failed: ${e.message}`); }
+  if (!pages.length) return setStatus('No images found (try lowering the minimum size).');
+  const embeddedCount = pages.filter((p) => !p.fullPage).length;
+  const modeNote = embeddedCount
+    ? `${embeddedCount} embedded image(s)`
+    : 'no embedded images — full-page fallback (scanned PDF?)';
 
   drafts = [];
   for (const p of pages) {
@@ -94,7 +121,7 @@ $('runBtn').addEventListener('click', async () => {
     }
     renderRows();
   }
-  setStatus(`Done: ${drafts.length} draft(s). Edit, then export.`);
+  setStatus(`Done: ${drafts.length} draft(s) — ${modeNote}. Edit, then export.`);
   // Clear key from memory after run; user must re-enter per session.
   $('apiKey').value = '';
 });

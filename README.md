@@ -39,6 +39,7 @@ python scripts/generate_alt.py --pdf sample.pdf --out alt-texts.json \
 
 ## Limits (v1)
 
-- Browser extracts one item per page (thumbnail + text context). True embedded-image extraction is in `scripts/generate_alt.py`.
+- Browser extracts embedded images per page (skips stencil masks, tiling patterns, and sub-`min-size` icons; dedupes shared XObjects). Scanned/image-only PDFs fall back to full-page renders.
+- Context is page-level text (up to ~2000 chars, word-boundary trimmed, scrollable in the table) — not yet proximity-scoped to each image's position.
 - Browser cannot write PDF/UA tag trees; export JSON/CSV for review, tag in the Python/Drupal path.
 - Local VLM weights are hundreds of MB on first run and need WebGPU (Chrome/Edge 113+).
