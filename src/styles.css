@@ -1,0 +1,12 @@
+:root { color-scheme: light dark; }
+body { font-family: system-ui, sans-serif; max-width: 70rem; margin: 0 auto; padding: 1rem; line-height: 1.5; }
+.skip-link { position: absolute; left: -999px; }
+.skip-link:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem; }
+section { border: 1px solid #888; border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
+label { display: block; margin-top: .5rem; font-weight: 600; }
+input[type="url"], input[type="text"], input[type="password"], select { width: min(32rem, 100%); padding: .4rem; }
+button { margin: .5rem .5rem 0 0; padding: .5rem 1rem; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+th, td { border: 1px solid #888; padding: .5rem; vertical-align: top; }
+canvas, img.thumb { max-width: 12rem; height: auto; display: block; }
+textarea { width: 100%; min-height: 4rem; }

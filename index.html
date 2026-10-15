@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF Alt-Fixer — standalone review tool</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header>
+    <h1>PDF Alt-Fixer</h1>
+    <p>Standalone demo. Pick <strong>browser-local model</strong> (private, WebGPU) or <strong>your own endpoint</strong> (Ollama, llama-server, OpenRouter, …). Keys stay in this page only.</p>
+  </header>
+  <main id="main">
+    <section aria-labelledby="source-h">
+      <h2 id="source-h">1. Source PDF</h2>
+      <label for="pdfFile">PDF file</label>
+      <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+      <p><small>Tip: output from <a href="https://github.com/mgifford/pdf-crawler">pdf-crawler</a> (<code>ImageAltTextTest</code> failures, <code>report.json</code>) makes good test input.</small></p>
+    </section>
+
+    <section aria-labelledby="mode-h">
+      <h2 id="mode-h">2. Alt-text engine</h2>
+      <fieldset>
+        <legend>Engine</legend>
+        <label><input type="radio" name="engine" value="local" checked /> Browser-local VLM (transformers.js, WebGPU, no key)</label>
+        <label><input type="radio" name="engine" value="byok" /> My endpoint + API key (OpenAI-compatible)</label>
+      </fieldset>
+      <div id="byokFields" hidden>
+        <label for="baseUrl">API base URL</label>
+        <input id="baseUrl" type="url" inputmode="url" placeholder="http://localhost:11434/v1" autocomplete="off" />
+        <label for="apiKey">API key <small>(kept in memory; use a throwaway key for testing)</small></label>
+        <input id="apiKey" type="password" autocomplete="off" />
+        <label for="model">Model</label>
+        <input id="model" type="text" placeholder="qwen2.5-vl" autocomplete="off" />
+        <label for="lang">Target language</label>
+        <select id="lang">
+          <option value="en" selected>English (en)</option>
+          <option value="nl">Dutch (nl)</option>
+          <option value="de">German (de)</option>
+          <option value="fr">French (fr)</option>
+        </select>
+      </div>
+      <p id="gpuNote"><small>Local model downloads weights on first run (~hundreds of MB) and needs a WebGPU-capable browser. Quality is below server VLMs — treat output as drafts.</small></p>
+    </section>
+
+    <section aria-labelledby="run-h">
+      <h2 id="run-h">3. Generate &amp; review</h2>
+      <button id="runBtn" type="button">Generate alt-texts</button>
+      <button id="exportJson" type="button" disabled>Export JSON</button>
+      <button id="exportCsv" type="button" disabled>Export CSV</button>
+      <div id="status" role="status" aria-live="polite"></div>
+      <table id="resultsTable" hidden>
+        <caption>Per-page image drafts — edit before export</caption>
+        <thead>
+          <tr><th scope="col">Page</th><th scope="col">Preview</th><th scope="col">Context</th><th scope="col">Alt-text draft</th><th scope="col">Decorative</th></tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </section>
+  </main>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "pdf-alt-fixer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Standalone PDF alt-text review tool: browser-local VLM or BYO OpenAI-compatible endpoint, plus Actions-based fixer.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.5.0",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "vite": "^6.3.0"
+  }
+}
