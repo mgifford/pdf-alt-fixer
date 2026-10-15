@@ -368,6 +368,29 @@ export async function extractImages(file, { minSize = 50, maxImages = 100, maxPa
     } catch { /* ignore */ }
     stats.storeImages = inventory.length;
     stats.inventory = inventory;
+
+    // Raw XObject list from the page's Resources dict — shows every
+    // image reference the content stream *could* paint, whether or not
+    // pdf.js has decoded it yet. Helps diagnose "pdf.js didn't resolve it".
+    const xobjs = [];
+    try {
+      const resources = await page.getResources();
+      if (resources && resources.XObject) {
+        for (const [name, ref] of Object.entries(resources.XObject)) {
+          if (ref && (ref.isDict || ref.kind)) {
+            const sub = ref.get('Subtype');
+            if (sub === 'Image' || sub === 'Form') {
+              const w = ref.get('W') || ref.get('Width');
+              const h = ref.get('H') || ref.get('Height');
+              const cs = ref.get('CS') || ref.get('ColorSpace');
+              const bits = ref.get('BPC') || ref.get('BitsPerComponent');
+              xobjs.push({ name, subtype: sub, w, h, cs, bits });
+            }
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    stats.xobjects = xobjs;
     debug.push(stats);
     for (const it of found) {
       if (items.length >= maxImages) break;

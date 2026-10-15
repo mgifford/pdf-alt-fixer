@@ -301,6 +301,13 @@ function renderDebug() {
   $('debugPre').textContent = `Source: ${lastMeta ? `${lastMeta.file} (${lastMeta.sizeKB} KB)` : '(unknown)'}`
     + (lastMeta && lastMeta.title ? ` — ${lastMeta.title}` : '')
     + `\n\n${lines.join('\n')}`
+    + `\n\nXOBJECTS PER PAGE (from Resources dict — all image/form refs):\n`
+    + lastDebug.map((s) => {
+      if (!s.xobjects || !s.xobjects.length) return `p${s.page}: (no XObjects)`;
+      return `p${s.page}: ` + s.xobjects.map((o) =>
+        `${o.name}[${o.subtype}] ${o.w || '?'}x${o.h || '?'} ${o.cs || ''} ${o.bits || ''}bpc`
+      ).join('; ');
+    }).join('\n');
     + '\n\nIMAGE OBJECTS PER PAGE (resolved, before min-size filter):\n'
     + lastDebug.map((s) => {
       if (!s.inventory || !s.inventory.length) return `p${s.page}: (none resolved)`;
