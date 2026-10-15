@@ -12,3 +12,7 @@ canvas, img.thumb { max-width: 12rem; height: auto; display: block; }
 textarea { width: 100%; min-height: 4rem; }
 .ctx { max-width: 26rem; max-height: 9rem; overflow: auto; }
 input[type="number"] { width: 6rem; padding: .4rem; }
+.dropzone { border: 2px dashed #888; border-radius: .5rem; padding: 1.5rem; text-align: center; cursor: pointer; }
+.dropzone.dragover { border-color: #06c; background: rgba(0, 102, 204, .08); }
+.dropzone:focus-visible { outline: 3px solid #06c; outline-offset: 2px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

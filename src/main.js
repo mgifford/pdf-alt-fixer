@@ -11,7 +11,49 @@ try {
   $('model').value = localStorage.getItem('paf.model') || '';
   $('lang').value = localStorage.getItem('paf.lang') || 'en';
   $('localModel').value = localStorage.getItem('paf.localModel') || '';
+  $('maxPages').value = localStorage.getItem('paf.maxPages') || '20';
 } catch { /* private mode */ }
+
+const dropzone = $('dropzone');
+const fileInput = $('pdfFile');
+
+function setStatus(msg) { $('status').textContent = msg; }
+
+function showFileName() {
+  const f = fileInput.files[0];
+  $('fileName').textContent = f ? `${f.name} (${Math.round(f.size / 1024)} KB)` : '';
+}
+
+function acceptFile(f) {
+  if (!f) return;
+  if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) {
+    setStatus('Only PDF files please.');
+    return;
+  }
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  fileInput.files = dt.files;
+  showFileName();
+  setStatus('');
+}
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
+['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault();
+  dropzone.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+}));
+dropzone.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) acceptFile(f);
+});
+fileInput.addEventListener('change', showFileName);
 
 function currentEngine() {
   return document.querySelector('input[name="engine"]:checked').value;
@@ -27,8 +69,6 @@ document.querySelectorAll('input[name="engine"]').forEach((r) =>
   r.addEventListener('change', syncEngineFields)
 );
 syncEngineFields();
-
-function setStatus(msg) { $('status').textContent = msg; }
 
 function renderRows() {
   const body = $('resultsBody');
@@ -132,16 +172,22 @@ $('runBtn').addEventListener('click', async () => {
   if (engine === 'byok' && (!baseUrl || !model)) return setStatus('Enter API base URL and model.');
 
   setStatus('Extracting embedded images…');
-  let pages;
+  let result;
   try {
     const minSize = Math.max(1, parseInt($('minSize').value, 10) || 50);
-    pages = await extractImages(file, { minSize });
+    const maxPages = Math.max(1, parseInt($('maxPages').value, 10) || 20);
+    try { localStorage.setItem('paf.maxPages', String(maxPages)); } catch { /* ignore */ }
+    result = await extractImages(file, { minSize, maxPages });
   } catch (e) { return setStatus(`PDF extraction failed: ${e.message}`); }
+  const pages = result.items;
   if (!pages.length) return setStatus('No images found (try lowering the minimum size).');
   const embeddedCount = pages.filter((p) => !p.fullPage).length;
+  const scopeNote = result.totalPages > result.pagesProcessed
+    ? `first ${result.pagesProcessed} of ${result.totalPages} pages`
+    : `${result.pagesProcessed} page(s)`;
   const modeNote = embeddedCount
-    ? `${embeddedCount} embedded image(s)`
-    : 'no embedded images — full-page fallback (scanned PDF?)';
+    ? `${embeddedCount} embedded image(s), ${scopeNote}`
+    : `no embedded images — full-page fallback (scanned PDF?), ${scopeNote}`;
 
   drafts = [];
   for (const p of pages) {
@@ -155,7 +201,7 @@ $('runBtn').addEventListener('click', async () => {
       const alt = decorative ? '' : raw;
       drafts.push({ ...p, alt, original: alt, decorative });
     } catch (e) {
-      drafts.push({ ...p, alt: '', decorative: false, error: String(e.message || e) });
+      drafts.push({ ...p, alt: '', original: '', decorative: false, error: String(e.message || e) });
       setStatus(`Item ${p.id} failed: ${e.message} — continuing.`);
     }
     renderRows();

@@ -165,14 +165,15 @@ async function extractEmbeddedImages(page, pageNum, minSize, seen) {
  * Extract per-image items from a PDF file.
  * @returns {Promise<Array>} items shaped {id,page,name,width,height,displayed,dataUrl,context,fullPage}
  */
-export async function extractImages(file, { minSize = 50, maxImages = 100 } = {}) {
+export async function extractImages(file, { minSize = 50, maxImages = 100, maxPages = 20 } = {}) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: buf }).promise;
+  const pageCount = Math.min(pdf.numPages, Math.max(1, maxPages));
   const seen = new Set();
   const items = [];
   let fallbackNeeded = true;
 
-  for (let n = 1; n <= pdf.numPages; n++) {
+  for (let n = 1; n <= pageCount; n++) {
     const page = await pdf.getPage(n);
     const context = await pageText(page);
     const found = await extractEmbeddedImages(page, n, minSize, seen);
@@ -186,7 +187,7 @@ export async function extractImages(file, { minSize = 50, maxImages = 100 } = {}
 
   if (fallbackNeeded) {
     // Scanned/image-only PDF: one full-page item per page, as before.
-    for (let n = 1; n <= pdf.numPages; n++) {
+    for (let n = 1; n <= pageCount; n++) {
       if (items.length >= maxImages) break;
       const page = await pdf.getPage(n);
       const viewport = page.getViewport({ scale: 1.0 });
@@ -203,5 +204,5 @@ export async function extractImages(file, { minSize = 50, maxImages = 100 } = {}
       });
     }
   }
-  return items;
+  return { items, totalPages: pdf.numPages, pagesProcessed: pageCount };
 }

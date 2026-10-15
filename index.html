@@ -15,8 +15,14 @@
   <main id="main">
     <section aria-labelledby="source-h">
       <h2 id="source-h">1. Source PDF</h2>
-      <label for="pdfFile">PDF file</label>
-      <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+      <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-describedby="dropHelp">
+        <p><strong>Drag &amp; drop a PDF here</strong> or choose a file</p>
+        <p id="dropHelp"><small>Only PDF files. Nothing leaves your machine in local mode.</small></p>
+        <p id="fileName" aria-live="polite"></p>
+      </div>
+      <input id="pdfFile" class="visually-hidden" type="file" accept="application/pdf,.pdf" tabindex="-1" aria-label="PDF file" />
+      <label for="maxPages">Max pages to process <small>— first N pages only</small></label>
+      <input id="maxPages" type="number" value="20" min="1" max="1000" />
       <label for="minSize">Minimum image dimension (px) <small>— smaller images are treated as decorative and skipped</small></label>
       <input id="minSize" type="number" value="50" min="1" max="500" />
       <p><small>Tip: output from <a href="https://github.com/mgifford/pdf-crawler">pdf-crawler</a> (<code>ImageAltTextTest</code> failures, <code>report.json</code>) makes good test input.</small></p>
