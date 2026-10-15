@@ -10,15 +10,23 @@ try {
   $('baseUrl').value = localStorage.getItem('paf.baseUrl') || '';
   $('model').value = localStorage.getItem('paf.model') || '';
   $('lang').value = localStorage.getItem('paf.lang') || 'en';
+  $('localModel').value = localStorage.getItem('paf.localModel') || '';
 } catch { /* private mode */ }
 
+function currentEngine() {
+  return document.querySelector('input[name="engine"]:checked').value;
+}
+
+function syncEngineFields() {
+  const byok = currentEngine() === 'byok';
+  $('byokFields').hidden = !byok;
+  $('localFields').hidden = byok;
+  $('gpuNote').hidden = byok;
+}
 document.querySelectorAll('input[name="engine"]').forEach((r) =>
-  r.addEventListener('change', () => {
-    const byok = document.querySelector('input[name="engine"]:checked').value === 'byok';
-    $('byokFields').hidden = !byok;
-  })
+  r.addEventListener('change', syncEngineFields)
 );
-$('byokFields').hidden = document.querySelector('input[name="engine"]:checked').value !== 'byok';
+syncEngineFields();
 
 function setStatus(msg) { $('status').textContent = msg; }
 
@@ -42,8 +50,12 @@ function renderRows() {
     tr.appendChild(page);
 
     const prev = document.createElement('td');
+    const fullLink = document.createElement('a');
+    fullLink.href = d.dataUrl; fullLink.target = '_blank'; fullLink.rel = 'noopener';
+    fullLink.setAttribute('aria-label', `Open full-size image ${d.id} in a new tab`);
+    fullLink.title = 'Open full size';
     const img = document.createElement('img'); img.src = d.dataUrl; img.alt = ''; img.className = 'thumb';
-    prev.appendChild(img); tr.appendChild(prev);
+    fullLink.appendChild(img); prev.appendChild(fullLink); tr.appendChild(prev);
 
     const ctx = document.createElement('td');
     const ctxBox = document.createElement('div'); ctxBox.className = 'ctx';
@@ -55,6 +67,30 @@ function renderRows() {
     const lb = document.createElement('label'); lb.htmlFor = ta.id; lb.textContent = `Alt-text for ${d.id}`;
     lb.style.cssText = 'position:absolute;left:-999px;';
     altTd.appendChild(lb); altTd.appendChild(ta);
+    const editedFlag = document.createElement('div');
+    editedFlag.innerHTML = '';
+    const editedSmall = document.createElement('small');
+    editedFlag.appendChild(editedSmall);
+    altTd.appendChild(editedFlag);
+    const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.textContent = 'Reset to AI draft';
+    resetBtn.setAttribute('aria-label', `Reset alt-text for ${d.id} to the AI draft`);
+    const syncEdited = () => {
+      const edited = ta.value !== (d.original || '');
+      editedSmall.textContent = d.error ? '' : (edited ? 'edited' : 'AI draft — unedited');
+      resetBtn.disabled = edited ? false : true;
+    };
+    ta.addEventListener('input', () => { drafts[i].alt = ta.value; syncEdited(); });
+    resetBtn.addEventListener('click', () => {
+      ta.value = d.original || '';
+      drafts[i].alt = ta.value;
+      const cb = document.getElementById(`dec-${d.id}`);
+      if (cb) { cb.checked = !!d.decorative; drafts[i].decorative = !!d.decorative; }
+      syncEdited();
+    });
+    altTd.appendChild(resetBtn);
+    syncEdited();
     if (d.error) {
       const err = document.createElement('div');
       err.innerHTML = '';
@@ -63,7 +99,6 @@ function renderRows() {
       err.appendChild(errSmall);
       altTd.appendChild(err);
     }
-    ta.addEventListener('input', () => { drafts[i].alt = ta.value; });
     tr.appendChild(altTd);
 
     const dec = document.createElement('td');
@@ -82,14 +117,16 @@ function renderRows() {
 $('runBtn').addEventListener('click', async () => {
   const file = $('pdfFile').files[0];
   if (!file) return setStatus('Choose a PDF first.');
-  const engine = document.querySelector('input[name="engine"]:checked').value;
+  const engine = currentEngine();
   const baseUrl = $('baseUrl').value.trim();
   const apiKey = $('apiKey').value;
   const model = $('model').value.trim();
+  const localModel = $('localModel').value.trim();
   const lang = $('lang').value;
   try {
     localStorage.setItem('paf.baseUrl', baseUrl);
     localStorage.setItem('paf.model', model);
+    localStorage.setItem('paf.localModel', localModel);
     localStorage.setItem('paf.lang', lang);
   } catch { /* ignore */ }
   if (engine === 'byok' && (!baseUrl || !model)) return setStatus('Enter API base URL and model.');
@@ -112,9 +149,11 @@ $('runBtn').addEventListener('click', async () => {
     try {
       const raw = engine === 'byok'
         ? await draftViaEndpoint({ baseUrl, apiKey, model, lang, dataUrl: p.dataUrl, context: p.context })
-        : await draftLocal(p.dataUrl, (prog) => setStatus(`Loading local model… ${Math.round((prog.progress || 0))}%`));
+        : await draftLocal(p.dataUrl, { model: localModel },
+            (prog) => setStatus(`Loading local model… ${Math.round((prog.progress || 0))}%`));
       const decorative = raw.trim() === 'DECORATIVE';
-      drafts.push({ ...p, alt: decorative ? '' : raw, decorative });
+      const alt = decorative ? '' : raw;
+      drafts.push({ ...p, alt, original: alt, decorative });
     } catch (e) {
       drafts.push({ ...p, alt: '', decorative: false, error: String(e.message || e) });
       setStatus(`Item ${p.id} failed: ${e.message} — continuing.`);

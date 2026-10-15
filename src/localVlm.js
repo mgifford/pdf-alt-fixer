@@ -1,26 +1,26 @@
-// Browser-local VLM via transformers.js (no key, private).
-// Heavy first load; needs WebGPU. Import lazily so BYOK users never pay the cost.
+// Browser-local captioning via transformers.js (no key, private).
+// Heavy first load; needs WebGPU for larger models (the tiny default also
+// runs on WASM/CPU, slowly). Import lazily so endpoint users never pay it.
+// Default is the classic vit-gpt2 captioning checkpoint because the
+// (image) -> text call pattern is stable across transformers.js versions;
+// bigger VLMs can be typed into the UI once their call pattern is confirmed.
 
 let captioner = null;
+let loadedModel = null;
 
-export async function draftLocal(dataUrl, onProgress) {
-  if (!('gpu' in navigator)) {
-    throw new Error('WebGPU not available in this browser — switch to endpoint mode or use Chrome/Edge 113+.');
+export async function draftLocal(dataUrl, { model, useWebGpu = true } = {}, onProgress) {
+  const id = (model || 'Xenova/vit-gpt2-image-captioning').trim();
+  const { pipeline, env } = await import('@huggingface/transformers');
+  if (!useWebGpu || !('gpu' in navigator)) {
+    env.device = 'wasm';
   }
-  const { pipeline } = await import('@huggingface/transformers');
-  captioner ??= await pipeline(
-    'image-to-text',
-    'HuggingFaceTB/SmolVLM2-256M-Video-Instruct',
-    {
-      dtype: 'q4',
-      device: 'webgpu',
+  if (!captioner || loadedModel !== id) {
+    captioner = await pipeline('image-to-text', id, {
       progress_callback: (p) => onProgress?.(p),
-    }
-  );
-  const out = await captioner(dataUrl, {
-    prompt: 'Describe this PDF page image in one concise alt-text sentence (max 250 characters).',
-    max_new_tokens: 128,
-  });
+    });
+    loadedModel = id;
+  }
+  const out = await captioner(dataUrl, { max_new_tokens: 100 });
   const text = Array.isArray(out) ? out[0]?.generated_text : out?.generated_text;
-  return (text || '').trim() || 'DECORATIVE';
+  return ((text || '').trim() || 'DECORATIVE').slice(0, 250);
 }

@@ -29,6 +29,12 @@
         <label><input type="radio" name="engine" value="local" checked /> Browser-local VLM (transformers.js, WebGPU, no key)</label>
         <label><input type="radio" name="engine" value="byok" /> My endpoint + API key (OpenAI-compatible)</label>
       </fieldset>
+      <div id="localFields">
+        <label for="localModel">Local model (Hugging Face id)</label>
+        <input id="localModel" type="text" autocomplete="off"
+          placeholder="Xenova/vit-gpt2-image-captioning" />
+        <p><small>Small captioning default — guaranteed to run. Larger VLMs (e.g. <code>Xenova/SmolVLM-256M-Instruct</code>) give better drafts if your machine handles them.</small></p>
+      </div>
       <div id="byokFields" hidden>
         <label for="baseUrl">API base URL</label>
         <input id="baseUrl" type="url" inputmode="url" placeholder="http://localhost:11434/v1" autocomplete="off" />
