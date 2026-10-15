@@ -84,12 +84,18 @@ function resolveImageAsync(page, name, timeoutMs = 4000) {
 
 function collectResolvedImages(page) {
   // Second net: every resolved image-like object in either store.
-  const found = new Map();
-  for (const store of storesOf(page)) {
+  // Yields {id, img, store} so the debug inventory can show where each
+  // object lives (pdf.js parks globally-cached images in commonObjs).
+  const found = [];
+  const seenIds = new Set();
+  for (const [storeName, store] of [['page', page.objs], ['common', page.commonObjs]]) {
+    if (!store) continue;
     try {
       for (const [id, data] of store) {
+        const key = `${storeName}:${id}`;
+        if (seenIds.has(key)) continue;
         const img = asPdfImage(data);
-        if (img && !found.has(id)) found.set(String(id), img);
+        if (img) { seenIds.add(key); found.push({ id: String(id), img, store: storeName }); }
       }
     } catch { /* store not iterable */ }
   }
@@ -282,7 +288,7 @@ async function extractEmbeddedImages(page, pageNum, pageW, pageH, minSize, seen,
 
   // Second net: resolved images the op walk missed (e.g. unusual paint paths).
   try {
-    for (const [id, img] of collectResolvedImages(page)) {
+    for (const { id, img } of collectResolvedImages(page)) {
       let rgba;
       try {
         rgba = pdfImageToRgba(img);
@@ -337,6 +343,17 @@ export async function extractImages(file, { minSize = 50, maxImages = 100, maxPa
     const found = await extractEmbeddedImages(page, n, viewport.width, viewport.height, minSize, seen, stats);
     stats.taggedAltsFound = tagged.alts.length;
     stats.structChecked = tagged.checked;
+    // Full inventory of resolved image objects (pre-filter): answers
+    // "what images does this page actually contain?" regardless of min-size.
+    const inventory = [];
+    try {
+      for (const { id, img, store } of collectResolvedImages(page)) {
+        inventory.push({ store, id, w: img.width, h: img.height });
+        if (inventory.length >= 80) break;
+      }
+    } catch { /* ignore */ }
+    stats.storeImages = inventory.length;
+    stats.inventory = inventory;
     debug.push(stats);
     for (const it of found) {
       if (items.length >= maxImages) break;

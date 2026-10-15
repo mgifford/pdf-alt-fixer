@@ -277,6 +277,11 @@ function renderDebug() {
     `decodeErr=${s.decodeErrors} err=${s.errors} taggedAlts=${s.taggedAltsFound ?? '?'} ` +
     `struct=${s.structChecked ? 'yes' : 'no'}${s.opListError ? ` OPLIST-ERR=${s.opListError}` : ''}`);
   $('debugPre').textContent = lines.join('\n')
+    + '\n\nIMAGE OBJECTS PER PAGE (resolved, before min-size filter):\n'
+    + lastDebug.map((s) => {
+      if (!s.inventory || !s.inventory.length) return `p${s.page}: (none resolved)`;
+      return `p${s.page}: ` + s.inventory.map((o) => `[${o.store}] ${o.id} ${o.w}x${o.h}`).join(', ');
+    }).join('\n')
     + '\n\nPaste this into a bug report if extraction misses figures.';
 }
 
