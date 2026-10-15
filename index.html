@@ -64,6 +64,11 @@
       <button id="runBtn" type="button">Generate alt-texts</button>
       <button id="exportJson" type="button" disabled>Export JSON</button>
       <button id="exportCsv" type="button" disabled>Export CSV</button>
+      <div id="progressWrap" hidden>
+        <label for="progressBar" id="progressLabel">Working…</label>
+        <progress id="progressBar" max="100" value="0">0%</progress>
+        <div><small id="progressDetail"></small></div>
+      </div>
       <div id="status" role="status" aria-live="polite"></div>
       <table id="resultsTable" hidden>
         <caption>Per-image drafts — edit before export. Context is surrounding page text (trimmed at a word boundary, full text scrolls).</caption>

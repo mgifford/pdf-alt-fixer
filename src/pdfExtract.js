@@ -323,9 +323,14 @@ async function extractEmbeddedImages(page, pageNum, pageW, pageH, minSize, seen,
  * @returns {Promise<{items,totalPages,pagesProcessed,debug}>} items shaped
  * {id,page,name,width,height,displayed,bbox,dataUrl,context,taggedAlts,fullPage}
  */
-export async function extractImages(file, { minSize = 50, maxImages = 100, maxPages = 20 } = {}) {
+export async function extractImages(file, { minSize = 50, maxImages = 100, maxPages = 20, onProgress } = {}) {
   const pdf = await docFor(file);
   const pageCount = Math.min(pdf.numPages, Math.max(1, maxPages));
+  const meta = await docMetadata(pdf);
+  const emit = (stage, done, total) => {
+    try { onProgress && onProgress({ stage, done, total }); } catch { /* ignore */ }
+  };
+  emit('metadata', 1, 1);
   const seen = new Set();
   const items = [];
   const debug = [];
@@ -335,6 +340,15 @@ export async function extractImages(file, { minSize = 50, maxImages = 100, maxPa
     const viewport = page.getViewport({ scale: 1.0 });
     const context = await pageText(page);
     const tagged = await pageTaggedAlts(page);
+    // Render FIRST: painting forces pdf.js to fully decode image XObjects
+    // and resolve them into the page/common object stores. The thumbnail is
+    // reused for fallback rows and the locate-on-page view.
+    let pageThumb = null;
+    try {
+      pageThumb = await renderPageThumbnail(page, 0.5);
+    } catch {
+      pageThumb = null;
+    }
     const stats = {
       page: n, ops: 0, paintImageOps: 0, inlineOps: 0, resolved: 0,
       extracted: 0, skippedSmall: 0, skippedDupe: 0, unresolved: 0,
@@ -357,9 +371,10 @@ export async function extractImages(file, { minSize = 50, maxImages = 100, maxPa
     debug.push(stats);
     for (const it of found) {
       if (items.length >= maxImages) break;
-      items.push({ ...it, context, taggedAlts: tagged.alts, structChecked: tagged.checked });
+      items.push({ ...it, context, taggedAlts: tagged.alts, structChecked: tagged.checked, pageThumb });
     }
     if (items.length >= maxImages) break;
+    emit('images', n, pageCount);
   }
 
   if (!items.length) {
@@ -367,6 +382,12 @@ export async function extractImages(file, { minSize = 50, maxImages = 100, maxPa
     for (let n = 1; n <= pageCount; n++) {
       const page = await pdf.getPage(n);
       const tagged = await pageTaggedAlts(page);
+      let pageThumb = null;
+      try {
+        pageThumb = await renderPageThumbnail(page, 0.5);
+      } catch {
+        pageThumb = null;
+      }
       items.push({
         id: `p${n}`,
         page: n,
@@ -375,13 +396,40 @@ export async function extractImages(file, { minSize = 50, maxImages = 100, maxPa
         height: 0,
         displayed: 'full page',
         bbox: null,
-        dataUrl: await renderPageThumbnail(page),
+        dataUrl: pageThumb,
         context: await pageText(page),
         taggedAlts: tagged.alts,
         structChecked: tagged.checked,
+        pageThumb,
         fullPage: true,
       });
+      emit('images', n, pageCount);
     }
   }
-  return { items, totalPages: pdf.numPages, pagesProcessed: pageCount, debug };
+  return { items, totalPages: pdf.numPages, pagesProcessed: pageCount, debug, meta };
+}
+
+/**
+ * Document-level metadata (filename is added by the caller).
+ */
+async function docMetadata(pdf) {
+  try {
+    const { info } = await pdf.getMetadata();
+    const pick = (o, ...ks) => {
+      for (const k of ks) if (o && o[k] != null && String(o[k])) return String(o[k]);
+      return '';
+    };
+    return {
+      title: pick(info, 'Title'),
+      author: pick(info, 'Author'),
+      subject: pick(info, 'Subject'),
+      keywords: pick(info, 'Keywords'),
+      creator: pick(info, 'Creator', 'CreatorTool'),
+      producer: pick(info, 'Producer', 'ProducerTool'),
+      created: pick(info, 'CreationDate'),
+      modified: pick(info, 'ModDate'),
+    };
+  } catch {
+    return {};
+  }
 }
