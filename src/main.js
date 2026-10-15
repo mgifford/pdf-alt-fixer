@@ -326,7 +326,6 @@ $('runBtn').addEventListener('click', async () => {
   } catch { /* ignore */ }
   if (engine === 'byok' && (!baseUrl || !model)) return setStatus('Enter API base URL and model.');
 
-  setStatus('Extracting embedded images…');
   setProgress(0.01, 'Reading document metadata…', '');
   let result;
   try {
