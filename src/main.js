@@ -1,9 +1,12 @@
-import { extractImages } from './pdfExtract.js';
+import { extractImages, pageThumbnail } from './pdfExtract.js';
 import { draftViaEndpoint } from './byok.js';
 import { draftLocal } from './localVlm.js';
+import { rateAlt } from './altQuality.js';
 
 const $ = (id) => document.getElementById(id);
 let drafts = [];
+let currentFile = null;
+let lastDebug = null;
 
 // Restore non-secret prefs; key is never persisted.
 try {
@@ -95,13 +98,108 @@ function renderRows() {
     fullLink.setAttribute('aria-label', `Open full-size image ${d.id} in a new tab`);
     fullLink.title = 'Open full size';
     const img = document.createElement('img'); img.src = d.dataUrl; img.alt = ''; img.className = 'thumb';
-    fullLink.appendChild(img); prev.appendChild(fullLink); tr.appendChild(prev);
+    fullLink.appendChild(img); prev.appendChild(fullLink);
+    // "Where is this on the page?" — lazy page thumbnail with bbox overlay.
+    if (d.bbox) {
+      const locBtn = document.createElement('button');
+      locBtn.type = 'button'; locBtn.className = 'linklike';
+      locBtn.textContent = 'Locate on page';
+      locBtn.setAttribute('aria-expanded', 'false');
+      const locBox = document.createElement('div');
+      locBox.className = 'locate'; locBox.hidden = true;
+      locBtn.addEventListener('click', async () => {
+        const open = locBox.hidden;
+        locBox.hidden = !open;
+        locBtn.setAttribute('aria-expanded', String(open));
+        if (open && !locBox.dataset.loaded) {
+          locBox.dataset.loaded = '1';
+          locBox.textContent = 'Rendering page…';
+          try {
+            const thumb = await pageThumbnail(currentFile, d.page);
+            locBox.innerHTML = '';
+            const wrap = document.createElement('div');
+            wrap.className = 'locateWrap';
+            const pg = document.createElement('img');
+            pg.src = thumb; pg.alt = ''; pg.className = 'locateImg';
+            const rect = document.createElement('div');
+            rect.className = 'locateRect';
+            rect.setAttribute('aria-hidden', 'true');
+            rect.style.left = `${d.bbox.x * 100}%`;
+            rect.style.top = `${d.bbox.y * 100}%`;
+            rect.style.width = `${d.bbox.w * 100}%`;
+            rect.style.height = `${d.bbox.h * 100}%`;
+            wrap.appendChild(pg); wrap.appendChild(rect);
+            locBox.appendChild(wrap);
+            const cap = document.createElement('div');
+            cap.innerHTML = '';
+            const capSmall = document.createElement('small');
+            capSmall.textContent = 'Approximate position from the content stream.';
+            cap.appendChild(capSmall);
+            locBox.appendChild(cap);
+          } catch (e) {
+            locBox.textContent = `Could not render page: ${e.message}`;
+          }
+        }
+      });
+      prev.appendChild(locBtn);
+      prev.appendChild(locBox);
+    }
+    tr.appendChild(prev);
 
     const ctx = document.createElement('td');
     const ctxBox = document.createElement('div'); ctxBox.className = 'ctx';
     ctxBox.textContent = d.context || '—'; ctx.appendChild(ctxBox); tr.appendChild(ctx);
 
     const altTd = document.createElement('td');
+    // Existing tagged Alt already in the PDF (best-effort, page-level).
+    const existBox = document.createElement('div');
+    existBox.className = 'existAlt';
+    existBox.innerHTML = '';
+    if (!d.structChecked) {
+      const s = document.createElement('small');
+      s.textContent = 'Existing alt: could not check structure tree.';
+      existBox.appendChild(s);
+    } else if (!d.taggedAlts || !d.taggedAlts.length) {
+      const s = document.createElement('small');
+      s.textContent = 'Existing alt: none found in tagged structure.';
+      existBox.appendChild(s);
+    } else {
+      const s = document.createElement('small');
+      s.textContent = `Tagged alt on this page (${d.taggedAlts.length}) — verify which figure it belongs to:`;
+      existBox.appendChild(s);
+      const ul = document.createElement('ul');
+      d.taggedAlts.forEach((a) => {
+        const li = document.createElement('li');
+        li.textContent = `“${a}”`;
+        rateAlt(a).forEach((q) => {
+          const b = document.createElement('span');
+          b.className = `badge ${q.level}`;
+          b.textContent = q.msg;
+          li.appendChild(document.createTextNode(' '));
+          li.appendChild(b);
+        });
+        ul.appendChild(li);
+      });
+      existBox.appendChild(ul);
+    }
+    altTd.appendChild(existBox);
+    if (d.fullPage) {
+      const fb = document.createElement('div');
+      fb.className = 'fallbackHint';
+      fb.innerHTML = '';
+      const fbSmall = document.createElement('small');
+      fbSmall.textContent = 'Full-page render, not an extracted figure: the caption below describes layout (“white and blue striped wall”), not content. Started as decorative — uncheck only if this page is genuinely image-only.';
+      fb.appendChild(fbSmall);
+      if (d.rawDraft) {
+        const q = document.createElement('div');
+        q.innerHTML = '';
+        const qSmall = document.createElement('small');
+        qSmall.textContent = `AI saw: “${d.rawDraft}”`;
+        q.appendChild(qSmall);
+        fb.appendChild(q);
+      }
+      altTd.appendChild(fb);
+    }
     const ta = document.createElement('textarea');
     ta.id = `alt-${d.id}`; ta.value = d.decorative ? '' : d.alt;
     const lb = document.createElement('label'); lb.htmlFor = ta.id; lb.textContent = `Alt-text for ${d.id}`;
@@ -112,25 +210,39 @@ function renderRows() {
     const editedSmall = document.createElement('small');
     editedFlag.appendChild(editedSmall);
     altTd.appendChild(editedFlag);
+    const badgeBox = document.createElement('div');
+    badgeBox.className = 'badges';
+    altTd.appendChild(badgeBox);
+    const refreshBadges = () => {
+      badgeBox.innerHTML = '';
+      rateAlt(ta.value).forEach((q) => {
+        const b = document.createElement('span');
+        b.className = `badge ${q.level}`;
+        b.textContent = q.msg;
+        badgeBox.appendChild(b);
+        badgeBox.appendChild(document.createTextNode(' '));
+      });
+    };
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
     resetBtn.textContent = 'Reset to AI draft';
     resetBtn.setAttribute('aria-label', `Reset alt-text for ${d.id} to the AI draft`);
+    const effectiveOriginal = () => (d.decorativeAtGenerate ? '' : (d.original || ''));
     const syncEdited = () => {
-      const edited = ta.value !== (d.original || '');
+      const edited = ta.value !== effectiveOriginal();
       editedSmall.textContent = d.error ? '' : (edited ? 'edited' : 'AI draft — unedited');
-      resetBtn.disabled = edited ? false : true;
+      resetBtn.disabled = !edited;
     };
-    ta.addEventListener('input', () => { drafts[i].alt = ta.value; syncEdited(); });
+    ta.addEventListener('input', () => { drafts[i].alt = ta.value; syncEdited(); refreshBadges(); });
     resetBtn.addEventListener('click', () => {
-      ta.value = d.original || '';
+      ta.value = effectiveOriginal();
       drafts[i].alt = ta.value;
       const cb = document.getElementById(`dec-${d.id}`);
-      if (cb) { cb.checked = !!d.decorative; drafts[i].decorative = !!d.decorative; }
-      syncEdited();
+      if (cb) { cb.checked = !!d.decorativeAtGenerate; drafts[i].decorative = !!d.decorativeAtGenerate; }
+      syncEdited(); refreshBadges();
     });
     altTd.appendChild(resetBtn);
-    syncEdited();
+    syncEdited(); refreshBadges();
     if (d.error) {
       const err = document.createElement('div');
       err.innerHTML = '';
@@ -144,7 +256,7 @@ function renderRows() {
     const dec = document.createElement('td');
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.id = `dec-${d.id}`; cb.checked = !!d.decorative;
-    cb.setAttribute('aria-label', `Mark page ${d.page} decorative`);
+    cb.setAttribute('aria-label', `Mark ${d.id} (page ${d.page}) decorative`);
     cb.addEventListener('change', () => { drafts[i].decorative = cb.checked; });
     dec.appendChild(cb); tr.appendChild(dec);
 
@@ -152,6 +264,20 @@ function renderRows() {
   });
   $('resultsTable').hidden = drafts.length === 0;
   $('exportJson').disabled = $('exportCsv').disabled = drafts.length === 0;
+}
+
+function renderDebug() {
+  const wrap = $('debugWrap');
+  if (!lastDebug || !lastDebug.length) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const lines = lastDebug.map((s) =>
+    `p${s.page}: ops=${s.ops} imgOps=${s.paintImageOps} inline=${s.inlineOps} ` +
+    `resolved=${s.resolved} extracted=${s.extracted} small=${s.skippedSmall} ` +
+    `dupe=${s.skippedDupe} unresolved=${s.unresolved} storeEnum=${s.viaStoreEnum} ` +
+    `decodeErr=${s.decodeErrors} err=${s.errors} taggedAlts=${s.taggedAltsFound ?? '?'} ` +
+    `struct=${s.structChecked ? 'yes' : 'no'}${s.opListError ? ` OPLIST-ERR=${s.opListError}` : ''}`);
+  $('debugPre').textContent = lines.join('\n')
+    + '\n\nPaste this into a bug report if extraction misses figures.';
 }
 
 $('runBtn').addEventListener('click', async () => {
@@ -187,8 +313,11 @@ $('runBtn').addEventListener('click', async () => {
     : `${result.pagesProcessed} page(s)`;
   const modeNote = embeddedCount
     ? `${embeddedCount} embedded image(s), ${scopeNote}`
-    : `no embedded images — full-page fallback (scanned PDF?), ${scopeNote}`;
+    : `no embedded images — full-page fallback, ${scopeNote}: captioning describes layout, not content, so rows start flagged decorative`;
+  lastDebug = result.debug;
+  renderDebug();
 
+  currentFile = file;
   drafts = [];
   for (const p of pages) {
     setStatus(`Generating ${p.id} (${pages.indexOf(p) + 1}/${pages.length}) via ${engine}…`);
@@ -197,11 +326,11 @@ $('runBtn').addEventListener('click', async () => {
         ? await draftViaEndpoint({ baseUrl, apiKey, model, lang, dataUrl: p.dataUrl, context: p.context })
         : await draftLocal(p.dataUrl, { model: localModel },
             (prog) => setStatus(`Loading local model… ${Math.round((prog.progress || 0))}%`));
-      const decorative = raw.trim() === 'DECORATIVE';
-      const alt = decorative ? '' : raw;
-      drafts.push({ ...p, alt, original: alt, decorative });
+      const decorative = p.fullPage ? true : raw.trim() === 'DECORATIVE';
+      const alt = decorative && !p.fullPage ? '' : raw;
+      drafts.push({ ...p, alt, original: alt, decorative, decorativeAtGenerate: decorative, rawDraft: raw });
     } catch (e) {
-      drafts.push({ ...p, alt: '', original: '', decorative: false, error: String(e.message || e) });
+      drafts.push({ ...p, alt: '', original: '', decorative: !!p.fullPage, decorativeAtGenerate: !!p.fullPage, error: String(e.message || e) });
       setStatus(`Item ${p.id} failed: ${e.message} — continuing.`);
     }
     renderRows();
